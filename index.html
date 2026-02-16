@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DefiDaiDao - Test v1.1</title>
+    <style>
+        :root { --bg: #0f172a; --card: #1e293b; --primary: #3b82f6; --success: #10b981; --reward: #f59e0b; --info: #8b5cf6; --text: #f1f5f9; }
+        body { background-color: var(--bg); color: var(--text); font-family: 'Segoe UI', Tahoma, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
+        .card { background-color: var(--card); padding: 2rem; border-radius: 1.5rem; box-shadow: 0 20px 50px rgba(0,0,0,0.5); width: 100%; max-width: 450px; text-align: center; border: 1px solid #334155; }
+        h2 { margin-bottom: 1.5rem; color: #fff; font-size: 1.8rem; }
+        .input-group { text-align: left; margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.5rem; font-size: 0.85rem; color: #94a3b8; }
+        input { width: 100%; padding: 12px; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 10px; box-sizing: border-box; font-family: monospace; }
+        button { width: 100%; padding: 14px; margin-top: 10px; border-radius: 10px; border: none; cursor: pointer; font-weight: bold; font-size: 0.95rem; transition: 0.3s; opacity: 0.6; }
+        .btn-active { opacity: 1 !important; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+        #connectBtn { background-color: var(--primary); color: white; opacity: 1; margin-bottom: 1rem; }
+        #rewardBtn { background-color: var(--reward); color: white; display: none; }
+        #infoBtn { background-color: var(--info); color: white; display: none; }
+        .success-btn { background-color: var(--success) !important; color: white !important; }
+        #status { margin-top: 1rem; font-size: 0.85rem; color: #94a3b8; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; }
+        #infoDisplay { margin-top: 20px; padding: 15px; background: #0f172a; border-radius: 12px; text-align: left; display: none; border: 1px solid #1e293b; }
+        .info-item { display: flex; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid #1e293b; padding-bottom: 4px; font-size: 0.9rem; }
+        .info-label { color: #94a3b8; }
+        .info-value { color: #10b981; font-family: monospace; }
+        .divider { margin: 20px 0; border-bottom: 1px solid #334155; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>DefiDaiDao Panel</h2>
+    <button id="connectBtn">Connect Wallet</button>
+    
+    <div id="registrationZone">
+        <div class="input-group">
+            <label>Sponsor Address (Upline):</label>
+            <input type="text" id="uplineInput" placeholder="0x...">
+        </div>
+        <button id="approveBtn" disabled style="background-color: #334155; color: #94a3b8;">1. Approve DAI</button>
+        <button id="registerBtn" disabled style="background-color: #334155; color: #94a3b8;">2. Register Now</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <button id="rewardBtn">🎁 Claim Rewards</button>
+    <button id="infoBtn">📊 My Global Stats</button>
+
+    <div id="infoDisplay">
+        <div class="info-item"><span class="info-label">User ID:</span> <span class="info-value" id="val-id">-</span></div>
+        <div class="info-item"><span class="info-label">All Left:</span> <span class="info-value" id="val-left">-</span></div>
+        <div class="info-item"><span class="info-label">All Right:</span> <span class="info-value" id="val-right">-</span></div>
+        <div class="info-item"><span class="info-label">Upline:</span> <span class="info-value" id="val-upline">-</span></div>
+        <div class="info-item"><span class="info-label">Sync Status:</span> <span class="info-value" id="val-sync">-</span></div>
+    </div>
+
+    <p id="status">Status: Waiting for connection...</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+<script>
+    const CONTRACT_ADDRESS = "0x84a47446f7a563Ce899aE991127b20FB8E20cEca";
+    const DAI_ADDRESS = "0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3";
+    const BSC_CHAIN_ID = '0x38';
+
+    let signer, tokenContract, mainContract;
+
+    const connectBtn = document.getElementById('connectBtn');
+    const approveBtn = document.getElementById('approveBtn');
+    const registerBtn = document.getElementById('registerBtn');
+    const rewardBtn = document.getElementById('rewardBtn');
+    const infoBtn = document.getElementById('infoBtn');
+    const infoDisplay = document.getElementById('infoDisplay');
+    const statusText = document.getElementById('status');
+
+    async function switchNetwork() {
+        try {
+            await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: BSC_CHAIN_ID }] });
+        } catch (err) {
+            if (err.code === 4902) {
+                await window.ethereum.request({
+                    method: 'wallet_addEthereumChain',
+                    params: [{
+                        chainId: BSC_CHAIN_ID,
+                        chainName: 'Binance Smart Chain',
+                        nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
+                        rpcUrls: ['https://bsc-dataseed.binance.org/'],
+                        blockExplorerUrls: ['https://bscscan.com/']
+                    }]
+                });
+            }
+        }
+    }
+
+    connectBtn.onclick = async () => {
+        if (window.ethereum) {
+            try {
+                await switchNetwork();
+                const provider = new ethers.BrowserProvider(window.ethereum);
+                await provider.send("eth_requestAccounts", []);
+                signer = await provider.getSigner();
+                const addr = await signer.getAddress();
+                
+                statusText.innerText = "Connected to BSC";
+                connectBtn.innerText = "Wallet Linked ✅";
+                connectBtn.classList.add('success-btn');
+                
+                approveBtn.disabled = false;
+                approveBtn.classList.add('btn-active');
+                approveBtn.style.backgroundColor = "#475569";
+                approveBtn.style.color = "white";
+
+                rewardBtn.style.display = "block";
+                rewardBtn.classList.add('btn-active');
+                infoBtn.style.display = "block";
+                infoBtn.classList.add('btn-active');
+
+                tokenContract = new ethers.Contract(DAI_ADDRESS, ["function approve(address s, uint256 a) public returns (bool)"], signer);
+                
+                // ABI اصلاح شده: تغییر نام تابع به "reward"
+                mainContract = new ethers.Contract(CONTRACT_ADDRESS, [
+                    "function step_2_become_owner(address _target) external",
+                    "function reward() external", 
+                    "function Owner_Info_Global(address _u) external view returns (uint64 ID, uint32 All_Left, uint32 All_Right, uint32 Save, uint32 Left_Remaining, uint32 Right_Remaining, address UpLine_Address, address Left_Child, address Right_Child, bool Sync_Complete)"
+                ], signer);
+            } catch (err) { statusText.innerText = "Connection Failed!"; }
+        }
+    };
+
+    // منطق دکمه Reward (اصلاح شده)
+    rewardBtn.onclick = async () => {
+        try {
+            await switchNetwork();
+            statusText.innerText = "Requesting reward withdrawal...";
+            const tx = await mainContract.reward(); // فراخوانی تابع جدید
+            statusText.innerText = "Transaction sent. Waiting for network...";
+            await tx.wait();
+            statusText.innerText = "Rewards claimed successfully! 💰";
+        } catch (err) {
+            statusText.innerText = "Claim failed! Check if you have rewards to claim.";
+            console.error(err);
+        }
+    };
+
+    infoBtn.onclick = async () => {
+        try {
+            const userAddr = await signer.getAddress();
+            statusText.innerText = "Fetching stats...";
+            const info = await mainContract.Owner_Info_Global(userAddr);
+            infoDisplay.style.display = "block";
+            document.getElementById('val-id').innerText = info.ID.toString();
+            document.getElementById('val-left').innerText = info.All_Left.toString();
+            document.getElementById('val-right').innerText = info.All_Right.toString();
+            document.getElementById('val-upline').innerText = info.UpLine_Address.substring(0,12) + "...";
+            document.getElementById('val-sync').innerText = info.Sync_Complete ? "Synced ✅" : "Pending";
+            statusText.innerText = "Stats Updated!";
+        } catch (err) { statusText.innerText = "Stats error!"; }
+    };
+
+    approveBtn.onclick = async () => {
+        try {
+            await switchNetwork();
+            const tx = await tokenContract.approve(CONTRACT_ADDRESS, ethers.parseUnits("1", 18));
+            await tx.wait();
+            approveBtn.classList.add('success-btn');
+            registerBtn.disabled = false;
+            registerBtn.classList.add('btn-active');
+            registerBtn.style.backgroundColor = "#3b82f6";
+            registerBtn.style.color = "white";
+        } catch (err) { statusText.innerText = "Approve Failed!"; }
+    };
+
+    registerBtn.onclick = async () => {
+        const upline = document.getElementById('uplineInput').value.trim();
+        try {
+            await switchNetwork();
+            const tx = await mainContract.step_2_become_owner(upline);
+            await tx.wait();
+            registerBtn.classList.add('success-btn');
+            statusText.innerText = "Registration Success!";
+        } catch (err) { statusText.innerText = "Register failed!"; }
+    };
+</script>
+</body>
+</html>
